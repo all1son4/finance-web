@@ -7,6 +7,8 @@ const seedEmail = process.env.SEED_EMAIL ?? "demo@finance.app";
 const seedPassword = process.env.SEED_PASSWORD ?? "demo12345";
 const seedUserName = process.env.SEED_USER_NAME ?? "Демо";
 const seedAppName = process.env.SEED_APP_NAME ?? "Household Finance";
+const seedWorkspaceId = process.env.SEED_WORKSPACE_ID ?? "demo-workspace";
+const seedInviteCode = process.env.SEED_INVITE_CODE ?? "DEMOFIN10";
 
 function slugify(value) {
   return value
@@ -44,20 +46,56 @@ async function main() {
     },
   });
 
+  const workspace = await prisma.workspace.upsert({
+    where: { id: seedWorkspaceId },
+    update: {
+      currency: "PLN",
+      inviteCode: seedInviteCode,
+      locale: "ru-RU",
+      name: seedAppName,
+    },
+    create: {
+      currency: "PLN",
+      id: seedWorkspaceId,
+      inviteCode: seedInviteCode,
+      locale: "ru-RU",
+      name: seedAppName,
+    },
+  });
+
+  await prisma.workspaceMembership.upsert({
+    where: {
+      userId_workspaceId: {
+        userId: user.id,
+        workspaceId: workspace.id,
+      },
+    },
+    update: {
+      role: "OWNER",
+    },
+    create: {
+      role: "OWNER",
+      userId: user.id,
+      workspaceId: workspace.id,
+    },
+  });
+
   for (const member of members) {
     await prisma.member.upsert({
       where: {
-        userId_name: {
-          userId: user.id,
+        workspaceId_name: {
+          workspaceId: workspace.id,
           name: member.name,
         },
       },
       update: {
         color: member.color,
         sortOrder: member.sortOrder,
+        userId: user.id,
       },
       create: {
         userId: user.id,
+        workspaceId: workspace.id,
         name: member.name,
         color: member.color,
         sortOrder: member.sortOrder,
@@ -68,45 +106,31 @@ async function main() {
   for (const category of defaultCategories) {
     await prisma.category.upsert({
       where: {
-        userId_name: {
-          userId: user.id,
+        workspaceId_name: {
+          workspaceId: workspace.id,
           name: category.name,
         },
       },
       update: {
         color: category.color,
         kind: category.kind,
+        userId: user.id,
+        workspaceId: workspace.id,
       },
       create: {
         userId: user.id,
+        workspaceId: workspace.id,
         ...category,
       },
     });
   }
 
-  const userSettings = await prisma.userSettings.upsert({
-    where: {
-      userId: user.id,
-    },
-    update: {
-      appName: seedAppName,
-      currency: "PLN",
-      locale: "ru-RU",
-    },
-    create: {
-      appName: seedAppName,
-      currency: "PLN",
-      locale: "ru-RU",
-      userId: user.id,
-    },
-  });
-
   for (const [index, category] of defaultCategories.entries()) {
     await prisma.starterCategory.upsert({
       where: {
-        userSettingsId_name: {
+        workspaceId_name: {
           name: category.name,
-          userSettingsId: userSettings.id,
+          workspaceId: workspace.id,
         },
       },
       update: {
@@ -119,29 +143,29 @@ async function main() {
         kind: category.kind,
         name: category.name,
         sortOrder: index,
-        userSettingsId: userSettings.id,
+        workspaceId: workspace.id,
       },
     });
   }
 
   const [foodCategory, rentCategory, salaryCategory] = await Promise.all([
     prisma.category.findFirstOrThrow({
-      where: { name: "Еда", userId: user.id },
+      where: { name: "Еда", workspaceId: workspace.id },
     }),
     prisma.category.findFirstOrThrow({
-      where: { name: "Аренда", userId: user.id },
+      where: { name: "Аренда", workspaceId: workspace.id },
     }),
     prisma.category.findFirstOrThrow({
-      where: { name: "Зарплата", userId: user.id },
+      where: { name: "Зарплата", workspaceId: workspace.id },
     }),
   ]);
 
   const [youMember, partnerMember] = await Promise.all([
     prisma.member.findFirstOrThrow({
-      where: { name: "Вы", userId: user.id },
+      where: { name: "Вы", workspaceId: workspace.id },
     }),
     prisma.member.findFirstOrThrow({
-      where: { name: "Партнер", userId: user.id },
+      where: { name: "Партнер", workspaceId: workspace.id },
     }),
   ]);
 
@@ -166,6 +190,7 @@ async function main() {
         name: "Аренда на месяц",
         startDate: startOfMonth,
         userId: user.id,
+        workspaceId: workspace.id,
       },
     });
 
@@ -179,12 +204,13 @@ async function main() {
         notes: "Запас на три месяца расходов.",
         targetAmount: 8000,
         userId: user.id,
+        workspaceId: workspace.id,
       },
     });
   }
 
   const transactionCount = await prisma.transaction.count({
-    where: { userId: user.id },
+    where: { workspaceId: workspace.id },
   });
 
   if (includeSampleData && !transactionCount) {
@@ -197,6 +223,7 @@ async function main() {
           memberId: youMember.id,
           transactionDate: new Date(),
           userId: user.id,
+          workspaceId: workspace.id,
         },
         {
           amount: 86.5,
@@ -205,6 +232,7 @@ async function main() {
           memberId: partnerMember.id,
           transactionDate: new Date(),
           userId: user.id,
+          workspaceId: workspace.id,
         },
         {
           amount: 1450,
@@ -213,6 +241,7 @@ async function main() {
           memberId: youMember.id,
           transactionDate: new Date(),
           userId: user.id,
+          workspaceId: workspace.id,
         },
       ],
     });

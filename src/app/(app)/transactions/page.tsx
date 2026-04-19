@@ -5,11 +5,12 @@ import prisma from "@/prisma";
 
 export default async function TransactionsPage() {
   const user = await requireUserPage();
+  const workspace = user.activeWorkspace;
   const [categories, transactions] = await Promise.all([
     prisma.category.findMany({
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
     prisma.transaction.findMany({
@@ -19,7 +20,7 @@ export default async function TransactionsPage() {
       },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
   ]);
@@ -27,8 +28,8 @@ export default async function TransactionsPage() {
   return (
     <TransactionsClient
       categories={categories.map(serializeCategory)}
-      members={user.members}
-      settings={user.settings}
+      members={workspace.members}
+      settings={workspace.settings}
       transactions={transactions.map(serializeTransaction)}
     />
   );

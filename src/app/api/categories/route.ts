@@ -7,10 +7,11 @@ import prisma from "@/prisma";
 export async function GET() {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const categories = await prisma.category.findMany({
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId,
       },
     });
 
@@ -25,6 +26,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const payload = categorySchema.parse(await readJson(request));
     const category = await prisma.category.create({
       data: {
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
         kind: payload.kind,
         name: payload.name,
         userId: user.id,
+        workspaceId,
       },
     });
 

@@ -1,38 +1,16 @@
-import { AppError, handleApiError, ok, readJson } from "@/lib/api";
-import { createSession, hashPassword, isSetupComplete } from "@/lib/auth";
-import { DEFAULT_CATEGORIES, getMemberColor } from "@/lib/defaults";
-import { DEFAULT_APP_CURRENCY, DEFAULT_APP_LOCALE, serializeSettings } from "@/lib/settings";
+import { handleApiError, ok, readJson } from "@/lib/api";
+import { createSession, hashPassword } from "@/lib/auth";
+import { serializeSettings } from "@/lib/settings";
 import prisma from "@/prisma";
 import { setupSchema } from "@/lib/validation";
-
-function dedupeNames(names: string[]) {
-  const seen = new Set<string>();
-  const uniqueNames: string[] = [];
-
-  for (const name of names) {
-    const key = name.trim().toLowerCase();
-    if (!key || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    uniqueNames.push(name.trim());
-  }
-
-  return uniqueNames;
-}
+import { createWorkspace } from "@/lib/workspaces";
 
 export async function POST(request: Request) {
   try {
-    if (await isSetupComplete()) {
-      throw new AppError(409, "Начальная настройка уже завершена.");
-    }
-
     const payload = setupSchema.parse(await readJson(request));
     const passwordHash = await hashPassword(payload.password);
-    const memberNames = dedupeNames([payload.name, ...payload.memberNames]);
 
-    const user = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
           email: payload.email,
@@ -41,46 +19,31 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.member.createMany({
-        data: memberNames.map((name, index) => ({
-          color: getMemberColor(index),
-          name,
-          sortOrder: index,
-          userId: createdUser.id,
-        })),
-      });
-
-      await tx.category.createMany({
-        data: DEFAULT_CATEGORIES.map((category) => ({
-          ...category,
-          userId: createdUser.id,
-        })),
-      });
-
-      const settings = await tx.userSettings.create({
-        data: {
-          appName: payload.name.trim(),
-          currency: DEFAULT_APP_CURRENCY,
-          locale: DEFAULT_APP_LOCALE,
-          starterCategories: {
-            createMany: {
-              data: DEFAULT_CATEGORIES.map((category, index) => ({
-                color: category.color,
-                kind: category.kind,
-                name: category.name,
-                sortOrder: index,
-              })),
-            },
-          },
-          userId: createdUser.id,
-        },
+      const workspace = await createWorkspace(tx, {
+        memberNames: payload.memberNames,
+        name: payload.workspaceName,
+        ownerName: createdUser.name,
+        ownerUserId: createdUser.id,
       });
 
       const user = await tx.user.findUniqueOrThrow({
         include: {
-          members: {
-            orderBy: {
-              sortOrder: "asc",
+          workspaceMemberships: {
+            include: {
+              workspace: {
+                include: {
+                  _count: {
+                    select: {
+                      members: true,
+                    },
+                  },
+                  members: {
+                    orderBy: {
+                      sortOrder: "asc",
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -90,25 +53,44 @@ export async function POST(request: Request) {
       });
 
       return {
-        settings,
         user,
+        workspaceId: workspace.id,
       };
     });
 
-    await createSession(user.user.id);
+    await createSession(result.user.id, result.workspaceId);
+
+    const membership = result.user.workspaceMemberships.find(
+      (item) => item.workspace.id === result.workspaceId,
+    );
 
     return ok(
       {
         user: {
-          email: user.user.email,
-          id: user.user.id,
-          members: user.user.members.map((member) => ({
-            color: member.color,
-            id: member.id,
-            name: member.name,
+          activeWorkspace: membership
+            ? {
+                id: membership.workspace.id,
+                inviteCode: membership.workspace.inviteCode,
+                members: membership.workspace.members.map((member) => ({
+                  color: member.color,
+                  id: member.id,
+                  name: member.name,
+                })),
+                name: membership.workspace.name,
+                role: membership.role,
+                settings: serializeSettings(membership.workspace),
+              }
+            : null,
+          email: result.user.email,
+          id: result.user.id,
+          name: result.user.name,
+          workspaces: result.user.workspaceMemberships.map((item) => ({
+            id: item.workspace.id,
+            inviteCode: item.workspace.inviteCode,
+            memberCount: item.workspace._count.members,
+            name: item.workspace.name,
+            role: item.role,
           })),
-          name: user.user.name,
-          settings: serializeSettings(user.settings),
         },
       },
       201,

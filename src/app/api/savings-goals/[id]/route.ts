@@ -4,11 +4,11 @@ import { serializeSavingsGoal } from "@/lib/serializers";
 import { savingsGoalSchema } from "@/lib/validation";
 import prisma from "@/prisma";
 
-async function getGoalForUser(id: string, userId: string) {
+async function getGoalForWorkspace(id: string, workspaceId: string) {
   const savingsGoal = await prisma.savingsGoal.findFirst({
     where: {
       id,
-      userId,
+      workspaceId,
     },
   });
 
@@ -26,7 +26,7 @@ export async function GET(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const savingsGoal = await getGoalForUser(id, user.id);
+    const savingsGoal = await getGoalForWorkspace(id, user.activeWorkspace.id);
 
     return ok({
       savingsGoal: serializeSavingsGoal(savingsGoal),
@@ -43,7 +43,7 @@ export async function PATCH(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const existing = await getGoalForUser(id, user.id);
+    const existing = await getGoalForWorkspace(id, user.activeWorkspace.id);
     const raw = (await readJson(request)) as Record<string, unknown>;
 
     const payload = savingsGoalSchema.parse({
@@ -85,7 +85,7 @@ export async function DELETE(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const savingsGoal = await getGoalForUser(id, user.id);
+    const savingsGoal = await getGoalForWorkspace(id, user.activeWorkspace.id);
 
     await prisma.savingsGoal.delete({
       where: {

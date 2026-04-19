@@ -7,18 +7,35 @@ import { redirect } from "next/navigation";
 
 import { AppError } from "@/lib/api";
 import { localizeMemberName } from "@/lib/defaults";
-import { ensureUserSettings, serializeSettings, type AppSettingsRecord } from "@/lib/settings";
+import { serializeSettings, type AppSettingsRecord } from "@/lib/settings";
 import prisma from "@/prisma";
 
 const SESSION_COOKIE = "finance_session";
 const SESSION_DURATION_DAYS = 30;
 
-export type SafeUser = {
-  email: string;
+export type WorkspaceSummary = {
   id: string;
+  inviteCode: string;
+  memberCount: number;
+  name: string;
+  role: string;
+};
+
+export type ActiveWorkspace = {
+  id: string;
+  inviteCode: string;
   members: Array<Pick<Member, "color" | "id" | "name">>;
   name: string;
+  role: string;
   settings: AppSettingsRecord;
+};
+
+export type SafeUser = {
+  activeWorkspace: ActiveWorkspace;
+  email: string;
+  id: string;
+  name: string;
+  workspaces: WorkspaceSummary[];
 };
 
 function hashToken(token: string) {
@@ -29,23 +46,30 @@ function sessionExpiresAt() {
   return new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
 }
 
+function sanitizeMembers(members: Array<Pick<Member, "color" | "id" | "name">>) {
+  return members.map((member) => ({
+    color: member.color,
+    id: member.id,
+    name: localizeMemberName(member.name),
+  }));
+}
+
 function sanitizeUser(user: {
+  activeWorkspace: ActiveWorkspace;
   email: string;
   id: string;
-  members: Array<Pick<Member, "color" | "id" | "name">>;
   name: string;
-  settings: AppSettingsRecord;
+  workspaces: WorkspaceSummary[];
 }): SafeUser {
   return {
+    activeWorkspace: {
+      ...user.activeWorkspace,
+      members: sanitizeMembers(user.activeWorkspace.members),
+    },
     email: user.email,
     id: user.id,
-    members: user.members.map((member) => ({
-      color: member.color,
-      id: member.id,
-      name: localizeMemberName(member.name),
-    })),
     name: user.name,
-    settings: user.settings,
+    workspaces: user.workspaces,
   };
 }
 
@@ -62,7 +86,7 @@ export async function isSetupComplete() {
   return userCount > 0;
 }
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, activeWorkspaceId: string) {
   const cookieStore = await cookies();
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
@@ -70,6 +94,7 @@ export async function createSession(userId: string) {
 
   await prisma.session.create({
     data: {
+      activeWorkspaceId,
       expiresAt,
       tokenHash,
       userId,
@@ -101,6 +126,23 @@ export async function clearSession() {
   cookieStore.delete(SESSION_COOKIE);
 }
 
+export async function setActiveWorkspace(workspaceId: string) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+
+  if (!token) {
+    throw new AppError(401, "Нужна авторизация.");
+  }
+
+  await prisma.session.updateMany({
+    data: {
+      activeWorkspaceId: workspaceId,
+    },
+    where: {
+      tokenHash: hashToken(token),
+    },
+  });
+}
+
 export async function getCurrentUser() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
 
@@ -112,9 +154,25 @@ export async function getCurrentUser() {
     include: {
       user: {
         include: {
-          members: {
+          workspaceMemberships: {
+            include: {
+              workspace: {
+                include: {
+                  _count: {
+                    select: {
+                      members: true,
+                    },
+                  },
+                  members: {
+                    orderBy: {
+                      sortOrder: "asc",
+                    },
+                  },
+                },
+              },
+            },
             orderBy: {
-              sortOrder: "asc",
+              createdAt: "asc",
             },
           },
         },
@@ -139,11 +197,34 @@ export async function getCurrentUser() {
     return null;
   }
 
-  const settings = await ensureUserSettings(session.user.id);
+  const memberships = session.user.workspaceMemberships;
+  const activeMembership =
+    memberships.find((membership) => membership.workspaceId === session.activeWorkspaceId) ??
+    memberships[0];
+
+  if (!activeMembership) {
+    return null;
+  }
 
   return sanitizeUser({
-    ...session.user,
-    settings: serializeSettings(settings),
+    activeWorkspace: {
+      id: activeMembership.workspace.id,
+      inviteCode: activeMembership.workspace.inviteCode,
+      members: activeMembership.workspace.members,
+      name: activeMembership.workspace.name,
+      role: activeMembership.role,
+      settings: serializeSettings(activeMembership.workspace),
+    },
+    email: session.user.email,
+    id: session.user.id,
+    name: session.user.name,
+    workspaces: memberships.map((membership) => ({
+      id: membership.workspace.id,
+      inviteCode: membership.workspace.inviteCode,
+      memberCount: membership.workspace._count.members,
+      name: membership.workspace.name,
+      role: membership.role,
+    })),
   });
 }
 

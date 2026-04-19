@@ -1,7 +1,7 @@
 import { handleApiError, ok, readJson } from "@/lib/api";
 import { requireUserApi } from "@/lib/auth";
 import {
-  ensureUserSettings,
+  ensureWorkspaceStarterCategories,
   serializeSettings,
   serializeStarterCategory,
 } from "@/lib/settings";
@@ -11,11 +11,11 @@ import { settingsSchema } from "@/lib/validation";
 export async function GET() {
   try {
     const user = await requireUserApi();
-    const settings = await ensureUserSettings(user.id);
+    const workspace = await ensureWorkspaceStarterCategories(user.activeWorkspace.id);
 
     return ok({
-      settings: serializeSettings(settings),
-      starterCategories: settings.starterCategories.map(serializeStarterCategory),
+      settings: serializeSettings(workspace),
+      starterCategories: workspace.starterCategories.map(serializeStarterCategory),
     });
   } catch (error) {
     return handleApiError(error);
@@ -25,7 +25,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const user = await requireUserApi();
-    const existing = await ensureUserSettings(user.id);
+    const existing = user.activeWorkspace.settings;
     const raw = (await readJson(request)) as Record<string, unknown>;
 
     const payload = settingsSchema.parse({
@@ -34,11 +34,11 @@ export async function PATCH(request: Request) {
       locale: raw.locale ?? existing.locale,
     });
 
-    const settings = await prisma.userSettings.update({
+    const workspace = await prisma.workspace.update({
       data: {
-        appName: payload.appName,
         currency: payload.currency.toUpperCase(),
         locale: payload.locale,
+        name: payload.appName,
       },
       include: {
         starterCategories: {
@@ -46,13 +46,13 @@ export async function PATCH(request: Request) {
         },
       },
       where: {
-        id: existing.id,
+        id: user.activeWorkspace.id,
       },
     });
 
     return ok({
-      settings: serializeSettings(settings),
-      starterCategories: settings.starterCategories.map(serializeStarterCategory),
+      settings: serializeSettings(workspace),
+      starterCategories: workspace.starterCategories.map(serializeStarterCategory),
     });
   } catch (error) {
     return handleApiError(error);

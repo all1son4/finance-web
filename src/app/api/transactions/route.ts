@@ -4,18 +4,22 @@ import { serializeTransaction } from "@/lib/serializers";
 import { transactionSchema } from "@/lib/validation";
 import prisma from "@/prisma";
 
-async function findTransactionDependencies(userId: string, categoryId: string, memberId: string) {
+async function findTransactionDependencies(
+  workspaceId: string,
+  categoryId: string,
+  memberId: string,
+) {
   const [category, member] = await Promise.all([
     prisma.category.findFirst({
       where: {
         id: categoryId,
-        userId,
+        workspaceId,
       },
     }),
     prisma.member.findFirst({
       where: {
         id: memberId,
-        userId,
+        workspaceId,
       },
     }),
   ]);
@@ -32,6 +36,7 @@ async function findTransactionDependencies(userId: string, categoryId: string, m
 export async function GET() {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const transactions = await prisma.transaction.findMany({
       include: {
         category: true,
@@ -39,7 +44,7 @@ export async function GET() {
       },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       where: {
-        userId: user.id,
+        workspaceId,
       },
     });
 
@@ -54,9 +59,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const payload = transactionSchema.parse(await readJson(request));
 
-    await findTransactionDependencies(user.id, payload.categoryId, payload.memberId);
+    await findTransactionDependencies(workspaceId, payload.categoryId, payload.memberId);
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -67,6 +73,7 @@ export async function POST(request: Request) {
         notes: payload.notes ?? null,
         transactionDate: new Date(payload.transactionDate),
         userId: user.id,
+        workspaceId,
       },
       include: {
         category: true,

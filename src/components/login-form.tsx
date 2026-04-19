@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -40,8 +41,7 @@ export function LoginForm() {
         <p className="eyebrow">С возвращением</p>
         <h1>Войдите в свой финансовый кабинет</h1>
         <p className="muted-copy">
-          Сессия хранится в безопасной `httpOnly` cookie, поэтому чувствительные
-          данные не попадают в `localStorage`.
+          Один аккаунт может иметь несколько пространств: личные и общие.
         </p>
       </div>
 
@@ -79,6 +79,13 @@ export function LoginForm() {
       <div className="auth-hints">
         <span><LockKeyhole size={14} /> Пароль никогда не уходит на клиент в открытом виде</span>
         <span><ArrowRight size={14} /> После входа вы сразу попадете на главную</span>
+        <span>
+          Нет аккаунта?
+          {" "}
+          <Link className="inline-link" href="/setup">
+            Зарегистрироваться
+          </Link>
+        </span>
       </div>
     </form>
   );

@@ -9,6 +9,7 @@ import prisma from "@/prisma";
 
 export default async function BudgetPage() {
   const user = await requireUserPage();
+  const workspace = user.activeWorkspace;
   const [budgets, categories, transactions] = await Promise.all([
     prisma.budget.findMany({
       include: {
@@ -16,13 +17,13 @@ export default async function BudgetPage() {
       },
       orderBy: [{ endDate: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
     prisma.category.findMany({
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
     prisma.transaction.findMany({
@@ -32,7 +33,7 @@ export default async function BudgetPage() {
       },
       orderBy: [{ transactionDate: "desc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
   ]);
@@ -41,7 +42,7 @@ export default async function BudgetPage() {
     <BudgetClient
       budgets={budgets.map(serializeBudget)}
       categories={categories.map(serializeCategory)}
-      settings={user.settings}
+      settings={workspace.settings}
       transactions={transactions.map(serializeTransaction)}
     />
   );

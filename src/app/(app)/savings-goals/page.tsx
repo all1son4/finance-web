@@ -5,17 +5,18 @@ import prisma from "@/prisma";
 
 export default async function SavingsGoalsPage() {
   const user = await requireUserPage();
+  const workspace = user.activeWorkspace;
   const savingsGoals = await prisma.savingsGoal.findMany({
     orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
     where: {
-      userId: user.id,
+      workspaceId: workspace.id,
     },
   });
 
   return (
     <SavingsGoalsClient
       savingsGoals={savingsGoals.map(serializeSavingsGoal)}
-      settings={user.settings}
+      settings={workspace.settings}
     />
   );
 }

@@ -1,18 +1,20 @@
 import { SettingsClient } from "@/components/settings-client";
 import { requireUserPage } from "@/lib/auth";
 import {
-  ensureUserSettings,
+  ensureWorkspaceStarterCategories,
   serializeStarterCategory,
 } from "@/lib/settings";
 
 export default async function SettingsPage() {
   const user = await requireUserPage();
-  const settings = await ensureUserSettings(user.id);
+  const workspace = await ensureWorkspaceStarterCategories(user.activeWorkspace.id);
 
   return (
     <SettingsClient
-      settings={user.settings}
-      starterCategories={settings.starterCategories.map(serializeStarterCategory)}
+      activeWorkspace={user.activeWorkspace}
+      settings={user.activeWorkspace.settings}
+      starterCategories={workspace.starterCategories.map(serializeStarterCategory)}
+      workspaces={user.workspaces}
     />
   );
 }

@@ -7,10 +7,11 @@ import prisma from "@/prisma";
 export async function GET() {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const savingsGoals = await prisma.savingsGoal.findMany({
       orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId,
       },
     });
 
@@ -25,6 +26,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const payload = savingsGoalSchema.parse(await readJson(request));
     const savingsGoal = await prisma.savingsGoal.create({
       data: {
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
         targetAmount: payload.targetAmount,
         targetDate: payload.targetDate ? new Date(payload.targetDate) : null,
         userId: user.id,
+        workspaceId,
       },
     });
 

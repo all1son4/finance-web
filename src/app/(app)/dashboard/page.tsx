@@ -22,6 +22,7 @@ import prisma from "@/prisma";
 
 export default async function DashboardPage() {
   const user = await requireUserPage();
+  const workspace = user.activeWorkspace;
   const [transactionsRaw, budgetsRaw, goalsRaw, categoriesRaw] = await Promise.all([
     prisma.transaction.findMany({
       include: {
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
       },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
     prisma.budget.findMany({
@@ -39,19 +40,19 @@ export default async function DashboardPage() {
       },
       orderBy: [{ endDate: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
     prisma.savingsGoal.findMany({
       orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
     prisma.category.findMany({
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId: workspace.id,
       },
     }),
   ]);
@@ -61,8 +62,8 @@ export default async function DashboardPage() {
   const savingsGoals = goalsRaw.map(serializeSavingsGoal);
   const categories = categoriesRaw.map(serializeCategory);
   const summary = summarizeTransactions(transactions);
-  const memberBreakdown = buildMemberSpendBreakdown(transactions, user.members);
-  const monthlyFlow = buildMonthlyFlow(transactions, 6, user.settings.locale);
+  const memberBreakdown = buildMemberSpendBreakdown(transactions, workspace.members);
+  const monthlyFlow = buildMonthlyFlow(transactions, 6, workspace.settings.locale);
   const categoryBreakdown = buildCategoryBreakdown(transactions).slice(0, 6);
   const budgetProgress = budgets
     .map((budget) => calculateBudgetProgress(budget, transactions))
@@ -76,9 +77,9 @@ export default async function DashboardPage() {
     <div className="page-stack">
       <DashboardQuickActions
         categories={categories}
-        members={user.members}
+        members={workspace.members}
         savingsGoals={savingsGoals}
-        settings={user.settings}
+        settings={workspace.settings}
         transactions={transactions}
       />
 
@@ -94,7 +95,7 @@ export default async function DashboardPage() {
         <div className="hero-inline-metrics">
           <div>
             <span>Участников учета</span>
-            <strong>{user.members.length}</strong>
+            <strong>{workspace.members.length}</strong>
           </div>
           <div>
             <span>Всего операций</span>
@@ -106,19 +107,19 @@ export default async function DashboardPage() {
       <section className="metric-grid">
         <article className="metric-card">
           <span>Доходы</span>
-          <strong>{formatCurrency(summary.income, user.settings)}</strong>
+          <strong>{formatCurrency(summary.income, workspace.settings)}</strong>
         </article>
         <article className="metric-card">
           <span>Потрачено</span>
-          <strong>{formatCurrency(summary.expenses, user.settings)}</strong>
+          <strong>{formatCurrency(summary.expenses, workspace.settings)}</strong>
         </article>
         <article className="metric-card">
           <span>Отложено</span>
-          <strong>{formatCurrency(summary.saved, user.settings)}</strong>
+          <strong>{formatCurrency(summary.saved, workspace.settings)}</strong>
         </article>
         <article className="metric-card">
           <span>Остаток</span>
-          <strong>{formatCurrency(summary.net, user.settings)}</strong>
+          <strong>{formatCurrency(summary.net, workspace.settings)}</strong>
         </article>
       </section>
 
@@ -142,7 +143,7 @@ export default async function DashboardPage() {
                     </span>
                 <span>{member.transactionCount} трат</span>
               </div>
-              <strong>{formatCurrency(member.spent, user.settings)}</strong>
+              <strong>{formatCurrency(member.spent, workspace.settings)}</strong>
               <ProgressBar color={member.color} value={member.share * 100} />
             </article>
           ))}
@@ -150,8 +151,8 @@ export default async function DashboardPage() {
       </section>
 
       <div className="chart-grid">
-        <FlowChart data={monthlyFlow} settings={user.settings} />
-        <CategoryChart data={categoryBreakdown} settings={user.settings} />
+        <FlowChart data={monthlyFlow} settings={workspace.settings} />
+        <CategoryChart data={categoryBreakdown} settings={workspace.settings} />
       </div>
 
       <div className="split-layout">
@@ -172,15 +173,15 @@ export default async function DashboardPage() {
                       <h4>{budget.name}</h4>
                       <p className="muted-copy">{budget.categoryName}</p>
                     </div>
-                    <strong>{formatCurrency(budget.amount, user.settings)}</strong>
+                    <strong>{formatCurrency(budget.amount, workspace.settings)}</strong>
                   </div>
                   <ProgressBar color={budget.categoryColor} value={budget.progress} />
                   <div className="budget-meta">
-                    <span>Потрачено {formatCurrency(budget.spent, user.settings)}</span>
+                    <span>Потрачено {formatCurrency(budget.spent, workspace.settings)}</span>
                     <span>
                       {budget.remaining >= 0
-                        ? `Осталось ${formatCurrency(budget.remaining, user.settings)}`
-                        : `Перерасход ${formatCurrency(Math.abs(budget.remaining), user.settings)}`}
+                        ? `Осталось ${formatCurrency(budget.remaining, workspace.settings)}`
+                        : `Перерасход ${formatCurrency(Math.abs(budget.remaining), workspace.settings)}`}
                     </span>
                   </div>
                 </article>
@@ -215,12 +216,12 @@ export default async function DashboardPage() {
                         {goal.targetDate ? `Срок: ${goal.targetDate}` : "Без срока"}
                       </p>
                     </div>
-                    <strong>{formatCurrency(goal.targetAmount, user.settings)}</strong>
+                    <strong>{formatCurrency(goal.targetAmount, workspace.settings)}</strong>
                   </div>
                   <ProgressBar color="var(--warning)" value={goal.progress} />
                   <div className="goal-meta">
-                    <span>Накоплено {formatCurrency(goal.currentAmount, user.settings)}</span>
-                    <span>Осталось {formatCurrency(goal.remaining, user.settings)}</span>
+                    <span>Накоплено {formatCurrency(goal.currentAmount, workspace.settings)}</span>
+                    <span>Осталось {formatCurrency(goal.remaining, workspace.settings)}</span>
                   </div>
                 </article>
               ))
@@ -270,10 +271,10 @@ export default async function DashboardPage() {
                     </div>
                     <h4>{transaction.description || transaction.categoryName}</h4>
                     <p className="muted-copy">
-                      {formatShortDate(transaction.transactionDate, user.settings)}
+                      {formatShortDate(transaction.transactionDate, workspace.settings)}
                     </p>
                   </div>
-                  <strong>{formatCurrency(transaction.amount, user.settings)}</strong>
+                  <strong>{formatCurrency(transaction.amount, workspace.settings)}</strong>
                 </div>
               </article>
             ))

@@ -5,7 +5,7 @@ import { toDateInputValue } from "@/lib/format";
 import { transactionSchema } from "@/lib/validation";
 import prisma from "@/prisma";
 
-async function getTransactionForUser(id: string, userId: string) {
+async function getTransactionForWorkspace(id: string, workspaceId: string) {
   const transaction = await prisma.transaction.findFirst({
     include: {
       category: true,
@@ -13,7 +13,7 @@ async function getTransactionForUser(id: string, userId: string) {
     },
     where: {
       id,
-      userId,
+      workspaceId,
     },
   });
 
@@ -24,18 +24,22 @@ async function getTransactionForUser(id: string, userId: string) {
   return transaction;
 }
 
-async function assertDependencies(userId: string, categoryId: string, memberId: string) {
+async function assertDependencies(
+  workspaceId: string,
+  categoryId: string,
+  memberId: string,
+) {
   const [category, member] = await Promise.all([
     prisma.category.findFirst({
       where: {
         id: categoryId,
-        userId,
+        workspaceId,
       },
     }),
     prisma.member.findFirst({
       where: {
         id: memberId,
-        userId,
+        workspaceId,
       },
     }),
   ]);
@@ -56,7 +60,7 @@ export async function GET(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const transaction = await getTransactionForUser(id, user.id);
+    const transaction = await getTransactionForWorkspace(id, user.activeWorkspace.id);
 
     return ok({
       transaction: serializeTransaction(transaction),
@@ -73,7 +77,7 @@ export async function PATCH(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const existing = await getTransactionForUser(id, user.id);
+    const existing = await getTransactionForWorkspace(id, user.activeWorkspace.id);
     const raw = (await readJson(request)) as Record<string, unknown>;
 
     const payload = transactionSchema.parse({
@@ -87,7 +91,7 @@ export async function PATCH(
         raw.transactionDate ?? toDateInputValue(existing.transactionDate),
     });
 
-    await assertDependencies(user.id, payload.categoryId, payload.memberId);
+    await assertDependencies(user.activeWorkspace.id, payload.categoryId, payload.memberId);
 
     const transaction = await prisma.transaction.update({
       data: {
@@ -122,7 +126,7 @@ export async function DELETE(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const transaction = await getTransactionForUser(id, user.id);
+    const transaction = await getTransactionForWorkspace(id, user.activeWorkspace.id);
 
     await prisma.transaction.delete({
       where: {

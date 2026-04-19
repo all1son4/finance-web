@@ -1,7 +1,7 @@
 import { handleApiError, ok, readJson } from "@/lib/api";
 import { requireUserApi } from "@/lib/auth";
 import {
-  requireStarterCategoryForUser,
+  requireStarterCategoryForWorkspace,
   serializeStarterCategory,
 } from "@/lib/settings";
 import prisma from "@/prisma";
@@ -14,7 +14,7 @@ export async function PATCH(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const existing = await requireStarterCategoryForUser(user.id, id);
+    const existing = await requireStarterCategoryForWorkspace(user.activeWorkspace.id, id);
     const raw = (await readJson(request)) as Record<string, unknown>;
 
     const payload = starterCategorySchema.parse({
@@ -51,7 +51,10 @@ export async function DELETE(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const starterCategory = await requireStarterCategoryForUser(user.id, id);
+    const starterCategory = await requireStarterCategoryForWorkspace(
+      user.activeWorkspace.id,
+      id,
+    );
 
     await prisma.starterCategory.delete({
       where: {

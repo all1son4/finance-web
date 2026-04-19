@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Users, Wallet } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -18,6 +19,7 @@ export function SetupForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
   const [memberNames, setMemberNames] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -33,6 +35,7 @@ export function SetupForm() {
           memberNames: parseMemberNames(memberNames),
           name,
           password,
+          workspaceName,
         }),
         method: "POST",
       });
@@ -51,11 +54,11 @@ export function SetupForm() {
   return (
     <form className="auth-card" onSubmit={handleSubmit}>
       <div className="auth-copy">
-        <p className="eyebrow">Первый запуск</p>
-        <h1>Создайте свое финансовое пространство</h1>
+        <p className="eyebrow">Регистрация</p>
+        <h1>Создайте аккаунт и первое финансовое пространство</h1>
         <p className="muted-copy">
-          Сначала создайте основной аккаунт, а затем добавьте людей, чьи траты
-          нужно разделять на дашборде.
+          У каждого пользователя может быть своё отдельное пространство или
+          несколько общих по приглашению.
         </p>
       </div>
 
@@ -93,6 +96,17 @@ export function SetupForm() {
       </label>
 
       <label className="field">
+        <span>Название пространства</span>
+        <input
+          className="input"
+          onChange={(event) => setWorkspaceName(event.target.value)}
+          placeholder="Семейный бюджет"
+          type="text"
+          value={workspaceName}
+        />
+      </label>
+
+      <label className="field">
         <span>Кого отслеживать</span>
         <textarea
           className="textarea"
@@ -112,7 +126,14 @@ export function SetupForm() {
 
       <div className="auth-hints">
         <span><Users size={14} /> Можно добавить до 8 участников учета</span>
-        <span><ArrowRight size={14} /> Дефолтные категории будут созданы автоматически</span>
+        <span><ArrowRight size={14} /> Дефолтные категории и код приглашения создадутся автоматически</span>
+        <span>
+          Уже есть аккаунт?
+          {" "}
+          <Link className="inline-link" href="/login">
+            Войти
+          </Link>
+        </span>
       </div>
     </form>
   );

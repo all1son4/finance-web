@@ -17,6 +17,11 @@ const colorSchema = z.string().regex(/^#(?:[\dA-Fa-f]{3}){1,2}$/, {
   message: "Цвет должен быть в формате hex.",
 });
 
+const memberNamesSchema = z
+  .array(z.string().trim().min(1).max(40))
+  .max(8, "Можно добавить до 8 пользователей.")
+  .default([]);
+
 const dateInputSchema = z.string().refine((value) => {
   const date = new Date(value);
   return !Number.isNaN(date.getTime()) && value.length >= 10;
@@ -35,12 +40,10 @@ const optionalString = (max: number) =>
 
 export const setupSchema = z.object({
   email: emailSchema,
-  memberNames: z
-    .array(z.string().trim().min(1).max(40))
-    .max(8, "Можно добавить до 8 пользователей.")
-    .default([]),
+  memberNames: memberNamesSchema,
   name: z.string().trim().min(2).max(60),
   password: passwordSchema,
+  workspaceName: z.string().trim().min(2).max(60),
 });
 
 export const loginSchema = z.object({
@@ -94,6 +97,23 @@ export const settingsSchema = z.object({
   appName: z.string().trim().min(2).max(60),
   currency: z.string().trim().length(3, "Код валюты должен состоять из 3 символов."),
   locale: z.string().trim().min(2).max(16),
+});
+
+export const workspaceCreateSchema = z.object({
+  memberNames: memberNamesSchema,
+  name: z.string().trim().min(2).max(60),
+});
+
+export const workspaceJoinSchema = z.object({
+  inviteCode: z
+    .string()
+    .trim()
+    .min(6, "Код приглашения слишком короткий.")
+    .max(64, "Код приглашения слишком длинный."),
+});
+
+export const workspaceSwitchSchema = z.object({
+  workspaceId: z.string().trim().min(1),
 });
 
 export const starterCategorySchema = z.object({

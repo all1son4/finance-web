@@ -1,4 +1,4 @@
-import type { Category, StarterCategory, UserSettings } from "@prisma/client";
+import type { Category, StarterCategory, Workspace } from "@prisma/client";
 
 import { AppError } from "@/lib/api";
 import { DEFAULT_CATEGORIES, type CategoryKindValue } from "@/lib/defaults";
@@ -35,12 +35,12 @@ export const CURRENCY_OPTIONS = [
   { label: "Доллар США", value: "USD" },
 ] as const;
 
-export function serializeSettings(settings: UserSettings): AppSettingsRecord {
+export function serializeSettings(workspace: Pick<Workspace, "currency" | "id" | "locale" | "name">): AppSettingsRecord {
   return {
-    appName: settings.appName,
-    currency: settings.currency,
-    id: settings.id,
-    locale: settings.locale,
+    appName: workspace.name,
+    currency: workspace.currency,
+    id: workspace.id,
+    locale: workspace.locale,
   };
 }
 
@@ -74,74 +74,58 @@ function mapExistingCategoriesToStarterCategories(categories: Category[]) {
   }));
 }
 
-export async function ensureUserSettings(userId: string) {
-  const existingSettings = await prisma.userSettings.findUnique({
+export async function ensureWorkspaceStarterCategories(workspaceId: string) {
+  const existingWorkspace = await prisma.workspace.findUnique({
     include: {
       starterCategories: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
     },
     where: {
-      userId,
+      id: workspaceId,
     },
   });
 
-  if (existingSettings) {
-    if (existingSettings.starterCategories.length) {
-      return existingSettings;
-    }
-
-    const existingCategories = await prisma.category.findMany({
-      orderBy: [{ kind: "asc" }, { name: "asc" }],
-      where: { userId },
-    });
-
-    return prisma.userSettings.update({
-      data: {
-        starterCategories: {
-          createMany: {
-            data: existingCategories.length
-              ? mapExistingCategoriesToStarterCategories(existingCategories)
-              : buildDefaultStarterCategories(),
-          },
-        },
-      },
-      include: {
-        starterCategories: {
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        },
-      },
-      where: {
-        id: existingSettings.id,
-      },
-    });
+  if (!existingWorkspace) {
+    throw new AppError(404, "Пространство не найдено.");
   }
 
-  return prisma.userSettings.create({
+  if (existingWorkspace.starterCategories.length) {
+    return existingWorkspace;
+  }
+
+  const existingCategories = await prisma.category.findMany({
+    orderBy: [{ kind: "asc" }, { name: "asc" }],
+    where: { workspaceId },
+  });
+
+  return prisma.workspace.update({
     data: {
-      appName: DEFAULT_APP_NAME,
-      currency: DEFAULT_APP_CURRENCY,
-      locale: DEFAULT_APP_LOCALE,
       starterCategories: {
         createMany: {
-          data: buildDefaultStarterCategories(),
+          data: existingCategories.length
+            ? mapExistingCategoriesToStarterCategories(existingCategories)
+            : buildDefaultStarterCategories(),
         },
       },
-      userId,
     },
     include: {
       starterCategories: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
     },
+    where: {
+      id: workspaceId,
+    },
   });
 }
 
-export async function requireStarterCategoryForUser(userId: string, id: string) {
-  const settings = await ensureUserSettings(userId);
-  const starterCategory = settings.starterCategories.find(
-    (category) => category.id === id,
-  );
+export async function requireStarterCategoryForWorkspace(
+  workspaceId: string,
+  id: string,
+) {
+  const workspace = await ensureWorkspaceStarterCategories(workspaceId);
+  const starterCategory = workspace.starterCategories.find((category) => category.id === id);
 
   if (!starterCategory) {
     throw new AppError(404, "Стартовая категория не найдена.");

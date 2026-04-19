@@ -4,11 +4,11 @@ import { serializeBudget } from "@/lib/serializers";
 import { budgetSchema } from "@/lib/validation";
 import prisma from "@/prisma";
 
-async function findBudgetCategory(userId: string, categoryId: string) {
+async function findBudgetCategory(workspaceId: string, categoryId: string) {
   const category = await prisma.category.findFirst({
     where: {
       id: categoryId,
-      userId,
+      workspaceId,
     },
   });
 
@@ -26,13 +26,14 @@ async function findBudgetCategory(userId: string, categoryId: string) {
 export async function GET() {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const budgets = await prisma.budget.findMany({
       include: {
         category: true,
       },
       orderBy: [{ endDate: "asc" }, { name: "asc" }],
       where: {
-        userId: user.id,
+        workspaceId,
       },
     });
 
@@ -47,8 +48,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUserApi();
+    const workspaceId = user.activeWorkspace.id;
     const payload = budgetSchema.parse(await readJson(request));
-    const category = await findBudgetCategory(user.id, payload.categoryId);
+    const category = await findBudgetCategory(workspaceId, payload.categoryId);
 
     const budget = await prisma.budget.create({
       data: {
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
         name: payload.name ?? `${category.name} бюджет`,
         startDate: new Date(payload.startDate),
         userId: user.id,
+        workspaceId,
       },
       include: {
         category: true,

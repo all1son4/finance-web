@@ -4,11 +4,11 @@ import { serializeCategory } from "@/lib/serializers";
 import { categorySchema } from "@/lib/validation";
 import prisma from "@/prisma";
 
-async function getCategoryForUser(id: string, userId: string) {
+async function getCategoryForWorkspace(id: string, workspaceId: string) {
   const category = await prisma.category.findFirst({
     where: {
       id,
-      userId,
+      workspaceId,
     },
   });
 
@@ -26,7 +26,7 @@ export async function GET(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const category = await getCategoryForUser(id, user.id);
+    const category = await getCategoryForWorkspace(id, user.activeWorkspace.id);
 
     return ok({
       category: serializeCategory(category),
@@ -43,7 +43,7 @@ export async function PATCH(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const existing = await getCategoryForUser(id, user.id);
+    const existing = await getCategoryForWorkspace(id, user.activeWorkspace.id);
     const raw = (await readJson(request)) as Record<string, unknown>;
 
     const payload = categorySchema.parse({
@@ -93,7 +93,7 @@ export async function DELETE(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const category = await getCategoryForUser(id, user.id);
+    const category = await getCategoryForWorkspace(id, user.activeWorkspace.id);
     const [budgetCount, transactionCount] = await Promise.all([
       prisma.budget.count({
         where: {

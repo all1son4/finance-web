@@ -20,52 +20,77 @@ model User {
   members      Member[]
   savingsGoals SavingsGoal[]
   sessions     Session[]
-  settings     UserSettings?
   transactions Transaction[]
+  workspaceMemberships WorkspaceMembership[]
 }
 
-model UserSettings {
-  id                String            @id @default(cuid())
-  userId            String            @unique
-  appName           String
+model Workspace {
+  id                String              @id @default(cuid())
+  name              String
+  inviteCode        String              @unique
   currency          String
   locale            String
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  activeSessions    Session[]           @relation("ActiveWorkspaceSessions")
+  budgets           Budget[]
+  categories        Category[]
+  members           Member[]
+  memberships       WorkspaceMembership[]
+  savingsGoals      SavingsGoal[]
   starterCategories StarterCategory[]
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions      Transaction[]
+}
+
+model WorkspaceMembership {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String    @default("MEMBER")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
 }
 
 model StarterCategory {
-  id             String       @id @default(cuid())
-  userSettingsId String
-  name           String
-  kind           String
-  color          String
-  sortOrder      Int          @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  userSettings   UserSettings @relation(fields: [userSettingsId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  kind        String
+  color       String
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([userSettingsId, name])
-  @@index([userSettingsId, sortOrder])
+  @@unique([workspaceId, name])
+  @@index([workspaceId, sortOrder])
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String     @id @default(cuid())
+  userId            String
+  activeWorkspaceId String?
+  tokenHash         String     @unique
+  expiresAt         DateTime
+  createdAt         DateTime   @default(now())
+  activeWorkspace   Workspace? @relation("ActiveWorkspaceSessions", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+  @@index([activeWorkspaceId])
   @@index([userId])
 }
 
 model Member {
   id           String        @id @default(cuid())
   userId       String
+  workspaceId  String
   name         String
   color        String
   sortOrder    Int           @default(0)
@@ -73,14 +98,17 @@ model Member {
   updatedAt    DateTime      @updatedAt
   transactions Transaction[]
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, name])
+  @@unique([workspaceId, name])
   @@index([userId])
+  @@index([workspaceId])
 }
 
 model Category {
   id           String        @id @default(cuid())
   userId       String
+  workspaceId  String
   name         String
   kind         String
   color        String
@@ -89,14 +117,17 @@ model Category {
   budgets      Budget[]
   transactions Transaction[]
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, name])
+  @@unique([workspaceId, name])
   @@index([userId, kind])
+  @@index([workspaceId, kind])
 }
 
 model Transaction {
   id              String   @id @default(cuid())
   userId          String
+  workspaceId     String
   memberId        String
   categoryId      String
   amount          Decimal
@@ -108,15 +139,18 @@ model Transaction {
   category        Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   member          Member   @relation(fields: [memberId], references: [id], onDelete: Restrict)
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([categoryId])
   @@index([memberId])
   @@index([userId, transactionDate])
+  @@index([workspaceId, transactionDate])
 }
 
 model Budget {
   id         String   @id @default(cuid())
   userId     String
+  workspaceId String
   categoryId String
   name       String
   amount     Decimal
@@ -126,13 +160,16 @@ model Budget {
   updatedAt  DateTime @updatedAt
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId, startDate, endDate])
+  @@index([workspaceId, startDate, endDate])
 }
 
 model SavingsGoal {
   id            String    @id @default(cuid())
   userId        String
+  workspaceId   String
   name          String
   targetAmount  Decimal
   currentAmount Decimal   @default(0)
@@ -141,6 +178,8 @@ model SavingsGoal {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId, targetDate])
+  @@index([workspaceId, targetDate])
 }

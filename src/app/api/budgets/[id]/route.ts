@@ -5,14 +5,14 @@ import { serializeBudget } from "@/lib/serializers";
 import { budgetSchema } from "@/lib/validation";
 import prisma from "@/prisma";
 
-async function getBudgetForUser(id: string, userId: string) {
+async function getBudgetForWorkspace(id: string, workspaceId: string) {
   const budget = await prisma.budget.findFirst({
     include: {
       category: true,
     },
     where: {
       id,
-      userId,
+      workspaceId,
     },
   });
 
@@ -23,11 +23,11 @@ async function getBudgetForUser(id: string, userId: string) {
   return budget;
 }
 
-async function assertBudgetCategory(userId: string, categoryId: string) {
+async function assertBudgetCategory(workspaceId: string, categoryId: string) {
   const category = await prisma.category.findFirst({
     where: {
       id: categoryId,
-      userId,
+      workspaceId,
     },
   });
 
@@ -49,7 +49,7 @@ export async function GET(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const budget = await getBudgetForUser(id, user.id);
+    const budget = await getBudgetForWorkspace(id, user.activeWorkspace.id);
 
     return ok({
       budget: serializeBudget(budget),
@@ -66,7 +66,7 @@ export async function PATCH(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const existing = await getBudgetForUser(id, user.id);
+    const existing = await getBudgetForWorkspace(id, user.activeWorkspace.id);
     const raw = (await readJson(request)) as Record<string, unknown>;
 
     const payload = budgetSchema.parse({
@@ -77,7 +77,7 @@ export async function PATCH(
       startDate: raw.startDate ?? toDateInputValue(existing.startDate),
     });
 
-    const category = await assertBudgetCategory(user.id, payload.categoryId);
+    const category = await assertBudgetCategory(user.activeWorkspace.id, payload.categoryId);
 
     const budget = await prisma.budget.update({
       data: {
@@ -110,7 +110,7 @@ export async function DELETE(
   try {
     const user = await requireUserApi();
     const { id } = await context.params;
-    const budget = await getBudgetForUser(id, user.id);
+    const budget = await getBudgetForWorkspace(id, user.activeWorkspace.id);
 
     await prisma.budget.delete({
       where: {

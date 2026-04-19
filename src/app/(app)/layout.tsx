@@ -10,18 +10,20 @@ export default async function AppLayout({
   children: React.ReactNode;
 }>) {
   const user = await requireUserPage();
+  const workspace = user.activeWorkspace;
 
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="brand-block">
-          <p className="eyebrow">{user.settings.appName}</p>
+          <p className="eyebrow">Пространство: {workspace.name}</p>
           <h1>{APP_TAGLINE}</h1>
         </div>
         <div className="header-meta">
           <div className="user-summary">
-            <strong>{user.name}</strong>
-            <span>{user.members.length} участников учета</span>
+            <strong>{workspace.name}</strong>
+            <span>{workspace.members.length} участников учета</span>
+            <span>{user.name}</span>
           </div>
           <HelpModal />
           <LogoutButton />
